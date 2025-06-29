@@ -1,0 +1,23 @@
+#custom-progress-bar {
+  position: absolute;
+  bottom: 10px;
+  left: 10%;
+  width: 80%;
+  height: 8px;
+  z-index: 10000;
+  background: rgba(0,0,0,0.5);
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-block; /* 默认隐藏，鼠标悬停视频时显示 */
+}
+#custom-progress-bar::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ff0000;
+}
+video:hover + #custom-progress-bar, 
+#custom-progress-bar:hover {
+  display: block;
+}

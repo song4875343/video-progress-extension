@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Vue兼容视频进度条插件",
+  "version": "2.3",
+  "description": "为视频添加自定义进度条，解除视频限制",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["pageScript.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
