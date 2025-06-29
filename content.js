@@ -1,8 +1,10 @@
 // ==============================
-// 通用视频进度条插件 (扩展版)
+// Vue兼容视频进度条插件 (修复版)
+// 版本: 2.3
+// 日期: 2023-08-18
 // ==============================
 
-console.log('内容脚本已加载');
+console.log('内容脚本已加载，准备处理视频元素');
 
 // 存储视频和进度条状态
 const videoProgressMap = new WeakMap();
@@ -15,24 +17,22 @@ function createProgressBar() {
     progressBar.max = '100';
     progressBar.value = '0';
     progressBar.id = 'custom-progress-bar';
-    progressBar.style.position = 'absolute';
-    progressBar.style.bottom = '10px';
-    progressBar.style.left = '0';
-    progressBar.style.width = '100%';
-    progressBar.style.zIndex = '9999';
-    progressBar.style.opacity = '0.3';
     return progressBar;
 }
 
-// 查找视频容器
+// 智能查找视频容器
 function findVideoContainer(video) {
+    // 首先尝试使用父元素
     let container = video.parentElement;
     
+    // 如果父元素不存在或不适合，使用视频的包装元素
     if (!container || container.tagName === 'BODY') {
+        // 创建一个包装容器
         container = document.createElement('div');
         container.style.position = 'relative';
         container.style.display = 'inline-block';
         
+        // 替换视频元素
         const parent = video.parentElement;
         if (parent) {
             parent.insertBefore(container, video);
@@ -40,6 +40,7 @@ function findVideoContainer(video) {
         }
     }
     
+    // 确保容器有相对定位
     if (getComputedStyle(container).position === 'static') {
         container.style.position = 'relative';
     }
@@ -49,27 +50,18 @@ function findVideoContainer(video) {
 
 // 附加进度条到视频
 function attachProgressBar(video) {
-    // 检查视频是否已处理
-    if (videoProgressMap.has(video) || video.hasAttribute('data-has-progress-bar')) {
-        return;
-    }
+    // 跳过已处理的视频
+    if (videoProgressMap.has(video)) return;
+    
+    let progressBar; // 在外部声明变量
     
     try {
-        // 创建进度条
-        const progressBar = createProgressBar();
+        // 创建进度条元素
+        progressBar = createProgressBar(); // 赋值
         
-        // 查找容器
+        // 智能定位容器
         const container = findVideoContainer(video);
-        
-        // 检查容器中是否已有进度条
-        if (container.querySelector('#custom-progress-bar')) {
-            return;
-        }
-        
         container.appendChild(progressBar);
-        
-        // 标记视频为已处理
-        video.setAttribute('data-has-progress-bar', 'true');
         
         // 存储状态
         const state = {
@@ -80,7 +72,7 @@ function attachProgressBar(video) {
         };
         videoProgressMap.set(video, state);
         
-        // 更新进度
+        // 事件处理
         const updateProgress = () => {
             if (!state.isDragging && video.duration > 0) {
                 progressBar.value = (video.currentTime / video.duration) * 100;
@@ -91,111 +83,116 @@ function attachProgressBar(video) {
         progressBar.addEventListener('input', () => {
             state.isDragging = true;
             video.currentTime = (progressBar.value / 100) * video.duration;
-            
-            // 通知页面脚本同步原始进度条
-            window.postMessage({
-                type: 'VIDEO_PROGRESS_EXTENSION',
-                action: 'PROGRESS_CHANGED',
-                details: {
-                    percent: progressBar.value,
-                    currentTime: video.currentTime,
-                    duration: video.duration
-                }
-            }, '*');
         });
         
         progressBar.addEventListener('change', () => {
-            setTimeout(() => {
-                state.isDragging = false;
-                
-                // 通知页面脚本同步原始进度条（拖动结束）
-                window.postMessage({
-                    type: 'VIDEO_PROGRESS_EXTENSION',
-                    action: 'PROGRESS_CHANGED',
-                    details: {
-                        percent: progressBar.value,
-                        currentTime: video.currentTime,
-                        duration: video.duration,
-                        isDragEnd: true
-                    }
-                }, '*');
-            }, 100);
+            setTimeout(() => state.isDragging = false, 100);
         });
         
         // 监听视频事件
         video.addEventListener('timeupdate', updateProgress);
         video.addEventListener('loadeddata', updateProgress);
         
-        // 添加悬停效果
-        container.addEventListener('mouseenter', () => {
-            progressBar.style.opacity = '0.8';
-        });
-        
-        container.addEventListener('mouseleave', () => {
-            if (!state.isDragging) {
-                progressBar.style.opacity = '0.3';
+        // 容器移除监听
+        const observer = new MutationObserver(mutations => {
+            for (const mutation of mutations) {
+                if (Array.from(mutation.removedNodes).includes(progressBar)) {
+                    // 进度条被移除，重新附加
+                    container.appendChild(progressBar);
+                }
             }
         });
+        
+        observer.observe(container, { childList: true });
+        state.observer = observer;
+        
+        console.log('进度条已附加到视频:', video.src);
     } catch (error) {
-        console.error('附加进度条失败:', error);
+        // 安全访问 progressBar
+        if (progressBar && progressBar.parentNode) {
+            progressBar.parentNode.removeChild(progressBar);
+        }
+        console.error('附加进度条失败:', error.message || error);
     }
 }
 
 // 处理视频元素
 function processVideo(video) {
-    // 忽略太小的视频元素（如预览缩略图）
-    if (video.offsetWidth < 100 || video.offsetHeight < 100) {
-        return;
-    }
-    
+    console.log('开始处理视频元素:', video.src || '未知来源');
     attachProgressBar(video);
 }
 
 // 初始化插件
 function initVideoProgressControl() {
-    // 处理现有视频
-    document.querySelectorAll('video').forEach(processVideo);
+    console.log('🚀 初始化视频进度条插件 v2.3');
     
-    // 监听DOM变化
+    // 处理现有视频
+    const existingVideos = document.querySelectorAll('video');
+    console.log(`发现${existingVideos.length}个现有视频元素`);
+    existingVideos.forEach(processVideo);
+    
+    // 添加MutationObserver监听DOM变化
+    console.log('设置DOM变化监听器...');
     const observer = new MutationObserver(mutations => {
+        // 检查是否有新增的视频元素
         for (const mutation of mutations) {
             if (mutation.type === 'childList') {
                 for (const node of mutation.addedNodes) {
+                    // 直接是视频元素
                     if (node.nodeName === 'VIDEO') {
+                        console.log('监测到新增视频元素');
                         processVideo(node);
-                    } else if (node.nodeType === Node.ELEMENT_NODE) {
-                        node.querySelectorAll('video').forEach(processVideo);
+                    }
+                    // 可能包含视频元素的容器
+                    else if (node.nodeType === Node.ELEMENT_NODE) {
+                        const videos = node.querySelectorAll('video');
+                        if (videos.length > 0) {
+                            console.log(`监测到容器中有${videos.length}个新视频元素`);
+                            videos.forEach(processVideo);
+                        }
                     }
                 }
             }
         }
     });
     
+    // 监听整个文档
     observer.observe(document.body, {
         childList: true,
         subtree: true
     });
+    console.log('DOM监听器已启动');
+    
+    // 修复：增强定时扫描
+    // console.log('启动定时扫描（每3秒）...');
+    // setInterval(() => {
+    //     const videos = document.querySelectorAll('video');
+    //     console.log(`定时扫描：找到 ${videos.length} 个视频元素`);
+        
+    //     videos.forEach(video => {
+    //         if (!videoProgressMap.has(video)) {
+    //             console.log('处理新发现的视频元素');
+    //             processVideo(video);
+    //         }
+    //     });
+    // }, 3000);
+    
+    // console.log('✅ 视频进度条插件初始化完成');
 }
 
-// 处理来自页面脚本的消息
+// 创建一个自定义事件，用于在页面脚本中监听
 function setupCustomEvents() {
+    // 创建一个全局事件，用于接收页面脚本发送的消息
     window.addEventListener('message', function(event) {
+        // 确保消息来自同一个窗口
         if (event.source !== window) return;
         
+        // 处理来自页面脚本的消息
         if (event.data.type === 'VIDEO_PROGRESS_EXTENSION') {
-            if (event.data.action === 'VIDEO_REPLACED') {
-                // 清理旧进度条
-                document.querySelectorAll('#custom-progress-bar').forEach(bar => {
-                    if (bar.parentNode) bar.parentNode.removeChild(bar);
-                });
-                
-                // 重新处理视频
-                setTimeout(() => {
-                    document.querySelectorAll('video').forEach(video => {
-                        video.removeAttribute('data-has-progress-bar');
-                        processVideo(video);
-                    });
-                }, 100);
+            console.log('收到页面脚本消息:', event.data.action);
+            
+            if (event.data.action === 'VIDEO_PROCESSED') {
+                console.log('页面脚本已处理视频:', event.data.details);
             }
         }
     });
@@ -203,27 +200,57 @@ function setupCustomEvents() {
 
 // 注入外部脚本
 function injectExternalScript() {
-    const script = document.createElement('script');
-    script.src = chrome.runtime.getURL('pageScript.js');
-    script.onload = function() {
-        this.remove();
-        window.postMessage({
-            type: 'VIDEO_PROGRESS_EXTENSION',
-            action: 'INIT'
-        }, '*');
-    };
-    (document.head || document.documentElement).appendChild(script);
+    console.log('准备注入外部脚本...');
+    
+    try {
+        // 创建一个脚本元素
+        const script = document.createElement('script');
+        
+        // 获取脚本URL
+        const scriptURL = chrome.runtime.getURL('pageScript.js');
+        console.log('页面脚本URL:', scriptURL);
+        
+        script.src = scriptURL;
+        script.onload = function() {
+            console.log('外部脚本加载成功，将被移除');
+            this.remove(); // 加载后移除脚本标签
+            
+            // 通知页面脚本开始处理
+            window.postMessage({
+                type: 'VIDEO_PROGRESS_EXTENSION',
+                action: 'INIT'
+            }, '*');
+        };
+        
+        script.onerror = function(error) {
+            console.error('脚本加载失败:', error);
+        };
+        
+        // 添加到页面
+        (document.head || document.documentElement).appendChild(script);
+        console.log('脚本元素已添加到页面');
+    } catch (e) {
+        console.error('注入外部脚本时发生错误:', e);
+    }
 }
 
 // 启动插件
 if (document.readyState === 'complete') {
     initVideoProgressControl();
     setupCustomEvents();
-    injectExternalScript();
+    try {
+        injectExternalScript();
+    } catch (e) {
+        console.error('注入外部脚本失败:', e);
+    }
 } else {
     window.addEventListener('load', function() {
         initVideoProgressControl();
         setupCustomEvents();
-        injectExternalScript();
+        try {
+            injectExternalScript();
+        } catch (e) {
+            console.error('注入外部脚本失败:', e);
+        }
     });
 }
